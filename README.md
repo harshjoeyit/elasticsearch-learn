@@ -4,9 +4,12 @@
 
 ## Run locally
 
-### Run containers
+### Start/Stop containers
 ```bash
+# start
 docker-compose up -d
+# stop
+docker-compose down
 ```
 
 ### Open Kibana Dashboard - Devtools
