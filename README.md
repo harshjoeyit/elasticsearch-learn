@@ -14,7 +14,7 @@ docker-compose up -d
 http://localhost:5601/app/dev_tools#/console
 ```
 
-### Queries
+### Basic Queries
 
 ```
 GET _cluster/health
@@ -217,4 +217,143 @@ GET /books/_search
   }
 }
 
+```
+
+### Phonetic Searches and Synonymic expansions
+**Phonetic Search (sounds-like matching):**
+- "Stephen" matches "Steven"
+- Requires configuring analyzers with phonetic filters (like Metaphone, Soundex)
+  - "Stephen" or "Steven", both have Metaphone code: STFN
+- More complex—involves index settings and custom analyzers
+- Query: "Steven"
+  - After phonetic filter: "STFN"
+  - Matches: Documents with "STFN" → finds "Stephen King"
+
+**Synonym Expansion (meaning-based matching):**
+- "laptop" also finds "notebook"
+- Requires defining synonym files or inline synonyms
+- Also uses custom analyzers
+- Query: "laptop"
+  - After synonym filter: "laptop OR notebook OR computer"
+
+
+Install plugin for phoentic search
+```
+docker exec -it es-learning bin/elasticsearch-plugin install analysis-phonetic
+```
+
+```
+docker-compose restart elasticsearch
+```
+
+A little advanced index for books (with phonetic search and synonymic expansion configured)
+```
+PUT /books_advanced
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "my_metaphone": {
+          "type": "phonetic",
+          "encoder": "metaphone",
+          "replace": false
+        },
+        "my_synonyms": {
+          "type": "synonym",
+          "synonyms": [
+            "programmer, developer, coder",   # these 3 are synonyms
+            "book, publication, tome"         # these 3 are synonyms
+          ]
+        }
+      },
+      "analyzer": {
+        "phonetic_analyzer": {
+          "tokenizer": "standard",
+          "filter": ["lowercase", "my_metaphone"]
+        },
+        "synonym_analyzer": {
+          "tokenizer": "standard",
+          "filter": ["lowercase", "my_synonyms"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "title": {
+        "type": "text",
+        "analyzer": "synonym_analyzer"
+      },
+      "author": {
+        "type": "text",
+        "fields": {
+          "phonetic": {
+            "type": "text",
+            "analyzer": "phonetic_analyzer"
+          }
+        }
+      },
+      "year": {
+        "type": "integer"
+      },
+      "pages": {
+        "type": "integer"
+      }
+    }
+  }
+}
+```
+
+Add some books
+```
+POST /books_advanced/_doc
+{
+  "title": "The Professional Programmer",
+  "author": "Stephen McConnell",
+  "year": 2004,
+  "pages": 900
+}
+
+POST /books_advanced/_doc
+{
+  "title": "Becoming a Better Developer",
+  "author": "Steven Smith",
+  "year": 2015,
+  "pages": 350
+}
+```
+
+Test Phoentic search
+```
+# --- phonetic search
+GET /books_advanced/_search
+{
+  "query": {
+    "match": {
+      "author.phonetic": "Steven"
+    }
+  }
+}
+
+# --- normal search
+GET /books_advanced/_search
+{
+  "query": {
+    "match": {
+      "author": "Steven"
+    }
+  }
+}
+```
+
+Test synonymic expansion
+```
+GET /books_advanced/_search
+{
+  "query": {
+    "match": {
+      "title": "coder"
+    }
+  }
+}
 ```
